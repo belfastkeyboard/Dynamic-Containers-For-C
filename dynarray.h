@@ -38,6 +38,9 @@
 #include <assert.h>
 #include <stdbool.h>
 
+#undef GROW_FACTOR
+#undef ARRAY_MAIN
+
 #define GROW_FACTOR 2
 #define ARRAY_MIN 1
 
@@ -212,6 +215,3 @@ void array_shrink_##type(struct array_##type* arr)                          \
                                                                             \
     arr->_array = tmp;                                                      \
  }
-
-//#undef GROW_FACTOR
-//#undef ARRAY_MIN
