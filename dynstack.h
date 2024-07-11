@@ -30,17 +30,16 @@
 
 #pragma once
 
+// CONSIDER: no ability to shrink allocated memory
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
 #include <assert.h>
 #include <stdbool.h>
 
-// test
-// sup
-
 #define constructor_stack(type) {                                                                   \
-    ._elements = 0, ._capacity = 0, ._elem_size = sizeof(type), ._array = malloc(sizeof(type) * 0), \
+    ._elements = 0, ._capacity = 0, ._elem_size = sizeof(type), ._array = calloc(0, sizeof(type)),  \
     .push_##type = stack_push_##type,                                                               \
     .pop_##type = stack_pop_##type,                                                                 \
     .top_##type = stack_top_##type,                                                                 \
@@ -67,36 +66,41 @@
     bool   (*empty_##type)(struct stack_##type*);                       \
     size_t (*size_##type)(struct stack_##type*);                        \
 } stack_##type;                                                         \
+                                                                        \
 void stack_push_##type(struct stack_##type* stk, type elem)             \
 {                                                                       \
     if (stk->_elements >= stk->_capacity)                               \
     {                                                                   \
         size_t _capacity = stk->_capacity;                              \
-        type *cpy = malloc(stk->_elem_size * _capacity);                \
+        type *cpy = calloc(_capacity, stk->_elem_size);                 \
         memcpy(cpy, stk->_array, stk->_elem_size * _capacity);          \
         free(stk->_array);                                              \
         stk->_capacity = (stk->_capacity > 0) ? stk->_capacity * 2 : 1; \
-        stk->_array = malloc(stk->_elem_size * stk->_capacity);         \
+        stk->_array = calloc(stk->_capacity, stk->_elem_size);          \
         memcpy(stk->_array, cpy, stk->_elem_size * _capacity);          \
         free(cpy);                                                      \
     }                                                                   \
     stk->_array[stk->_elements] = elem;                                 \
     stk->_elements++;                                                   \
 }                                                                       \
+                                                                        \
 void stack_pop_##type(struct stack_##type* stk)                         \
 {                                                                       \
     assert(stk->_elements > 0);                                         \
     stk->_elements--;                                                   \
 }                                                                       \
+                                                                        \
 type stack_top_##type(struct stack_##type* stk)                         \
 {                                                                       \
     assert(stk->_elements > 0);                                         \
     return stk->_array[stk->_elements - 1];                             \
 }                                                                       \
+                                                                        \
 bool stack_empty_##type(struct stack_##type* stk)                       \
 {                                                                       \
     return (stk->_elements == 0);                                       \
 }                                                                       \
+                                                                        \
 size_t stack_size_##type(struct stack_##type* stk)                      \
 {                                                                       \
     return stk->_elements;                                              \
