@@ -42,10 +42,10 @@
 
 #define constructor_stack(type) {                                                                   \
     ._elements = 0, ._capacity = 0, ._elem_size = sizeof(type), ._array = calloc(0, sizeof(type)),  \
-    .push_##type = stack_push_##type,                                                               \
-    .pop_##type = stack_pop_##type,                                                                 \
-    .top_##type = stack_top_##type,                                                                 \
-    .empty_##type = stack_empty_##type, .size_##type = stack_size_##type }
+    .push = stack_push_##type,                                                                      \
+    .pop = stack_pop_##type,                                                                        \
+    .top = stack_top_##type,                                                                        \
+    .empty = stack_empty_##type, .size = stack_size_##type }
 
 #ifndef destructor
     #define destructor(item) \
@@ -58,15 +58,15 @@
 
 #define STACK(type) typedef struct stack_##type                         \
 {                                                                       \
-    type *_array;                                                       \
+    type*  _array;                                                       \
     size_t _elements;                                                   \
     size_t _capacity;                                                   \
     size_t _elem_size;                                                  \
-    void   (*push_##type)(struct stack_##type*, type);                  \
-    void   (*pop_##type)(struct stack_##type*);                         \
-    type   (*top_##type)(struct stack_##type*);                         \
-    bool   (*empty_##type)(struct stack_##type*);                       \
-    size_t (*size_##type)(struct stack_##type*);                        \
+    void   (*push)(struct stack_##type*, type);                         \
+    void   (*pop)(struct stack_##type*);                                \
+    type   (*top)(struct stack_##type*);                                \
+    bool   (*empty)(struct stack_##type*);                              \
+    size_t (*size)(struct stack_##type*);                               \
 } stack_##type;                                                         \
                                                                         \
 void stack_push_##type(struct stack_##type* stk, type elem)             \
