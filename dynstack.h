@@ -56,54 +56,52 @@
         item._elem_size = 0;
 #endif
 
-#define STACK(type) typedef struct stack_##type                         \
-{                                                                       \
-    type*  _array;                                                       \
-    size_t _elements;                                                   \
-    size_t _capacity;                                                   \
-    size_t _elem_size;                                                  \
-    void   (*push)(struct stack_##type*, type);                         \
-    void   (*pop)(struct stack_##type*);                                \
-    type   (*top)(struct stack_##type*);                                \
-    bool   (*empty)(struct stack_##type*);                              \
-    size_t (*size)(struct stack_##type*);                               \
-} stack_##type;                                                         \
-                                                                        \
-void stack_push_##type(struct stack_##type* stk, type elem)             \
-{                                                                       \
-    if (stk->_elements >= stk->_capacity)                               \
-    {                                                                   \
-        size_t _capacity = stk->_capacity;                              \
-        type *cpy = calloc(_capacity, stk->_elem_size);                 \
-        memcpy(cpy, stk->_array, stk->_elem_size * _capacity);          \
-        free(stk->_array);                                              \
-        stk->_capacity = (stk->_capacity > 0) ? stk->_capacity * 2 : 1; \
-        stk->_array = calloc(stk->_capacity, stk->_elem_size);          \
-        memcpy(stk->_array, cpy, stk->_elem_size * _capacity);          \
-        free(cpy);                                                      \
-    }                                                                   \
-    stk->_array[stk->_elements] = elem;                                 \
-    stk->_elements++;                                                   \
-}                                                                       \
-                                                                        \
-void stack_pop_##type(struct stack_##type* stk)                         \
-{                                                                       \
-    assert(stk->_elements > 0);                                         \
-    stk->_elements--;                                                   \
-}                                                                       \
-                                                                        \
-type stack_top_##type(struct stack_##type* stk)                         \
-{                                                                       \
-    assert(stk->_elements > 0);                                         \
-    return stk->_array[stk->_elements - 1];                             \
-}                                                                       \
-                                                                        \
-bool stack_empty_##type(struct stack_##type* stk)                       \
-{                                                                       \
-    return (stk->_elements == 0);                                       \
-}                                                                       \
-                                                                        \
-size_t stack_size_##type(struct stack_##type* stk)                      \
-{                                                                       \
-    return stk->_elements;                                              \
+#define STACK(type) typedef struct stack_##type                             \
+{                                                                           \
+    type*  _array;                                                          \
+    size_t _elements;                                                       \
+    size_t _capacity;                                                       \
+    size_t _elem_size;                                                      \
+    void   (*push)(struct stack_##type*, type);                             \
+    void   (*pop)(struct stack_##type*);                                    \
+    type   (*top)(struct stack_##type*);                                    \
+    bool   (*empty)(struct stack_##type*);                                  \
+    size_t (*size)(struct stack_##type*);                                   \
+} stack_##type;                                                             \
+                                                                            \
+void stack_push_##type(struct stack_##type* stk, type elem)                 \
+{                                                                           \
+    if (stk->_elements >= stk->_capacity)                                   \
+    {                                                                       \
+        stk->_capacity = (stk->_capacity > 0) ?                             \
+            stk->_capacity * GROW_FACTOR : ARRAY_MIN;                       \
+                                                                            \
+        type* tmp = realloc(stk->_array, stk->_elem_size * stk->_capacity); \
+        assert(tmp != NULL);                                                \
+        stk->_array = tmp;                                                  \
+    }                                                                       \
+    stk->_array[stk->_elements] = elem;                                     \
+    stk->_elements++;                                                       \
+}                                                                           \
+                                                                            \
+void stack_pop_##type(struct stack_##type* stk)                             \
+{                                                                           \
+    assert(stk->_elements > 0);                                             \
+    stk->_elements--;                                                       \
+}                                                                           \
+                                                                            \
+type stack_top_##type(struct stack_##type* stk)                             \
+{                                                                           \
+    assert(stk->_elements > 0);                                             \
+    return stk->_array[stk->_elements - 1];                                 \
+}                                                                           \
+                                                                            \
+bool stack_empty_##type(struct stack_##type* stk)                           \
+{                                                                           \
+    return (stk->_elements == 0);                                           \
+}                                                                           \
+                                                                            \
+size_t stack_size_##type(struct stack_##type* stk)                          \
+{                                                                           \
+    return stk->_elements;                                                  \
 }
