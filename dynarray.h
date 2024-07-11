@@ -25,7 +25,7 @@
         return 0;
     }
 
-    Do not manually modify: _elements, _capacity, _elem_size, or _array.
+    Do not manually modify: _elements, _capacity, _type_size, or _array.
     Use function pointers to do so.
 
 */
@@ -42,14 +42,14 @@
 #define ARRAY_MIN 1
 
 // is there a need for _##type on the function pointer names?
-#define constructor_array(type)                                                                                       \
-{                                                                                                                     \
-    ._elements = 0, ._capacity = 0, ._elem_size = sizeof(type), ._array = calloc(0, sizeof(type)),                    \
-    .push_back = array_push_##type, .insert = array_insert_##type,                                      \
-    .pop_back = array_pop_back_##type, .erase = array_erase_##type, .clear = array_clear_##type, \
-    .front = array_front_##type, .back = array_back_##type, .get = array_get_##type,             \
-    .empty = array_empty_##type, .size = array_size_##type,                                             \
-    .reserve = array_reserve_##type, .shrink = array_shrink_##type                                      \
+#define constructor_array(type)                                                                    \
+{                                                                                                  \
+    ._elements = 0, ._capacity = 0, ._type_size = sizeof(type), ._array = calloc(0, sizeof(type)), \
+    .push_back = array_push_##type, .insert = array_insert_##type,                                 \
+    .pop_back = array_pop_back_##type, .erase = array_erase_##type, .clear = array_clear_##type,   \
+    .front = array_front_##type, .back = array_back_##type, .get = array_get_##type,               \
+    .empty = array_empty_##type, .size = array_size_##type,                                        \
+    .reserve = array_reserve_##type, .shrink = array_shrink_##type                                 \
 }
 
 #ifndef destructor
@@ -58,27 +58,27 @@
         item._array = NULL;  \
         item._elements = 0;  \
         item._capacity = 0;  \
-        item._elem_size = 0;
+        item._type_size = 0;
 #endif
 
-#define ARRAY(type) typedef struct array_##type                             \
-{                                                                           \
-    type*  _array;                                                          \
-    size_t _elements;                                                       \
-    size_t _capacity;                                                       \
-    size_t _elem_size;                                                      \
-    void   (*push_back)(struct array_##type*, type);                 \
-    void   (*insert)(struct array_##type*, type, size_t);            \
-    void   (*pop_back)(struct array_##type*);                        \
-    size_t (*erase)(struct array_##type*, size_t);                   \
-    type   (*front)(struct array_##type*);                           \
-    type   (*back)(struct array_##type*);                            \
-    type   (*get)(struct array_##type*, size_t);                     \
-    bool   (*empty)(struct array_##type*);                           \
-    size_t (*size)(struct array_##type*);                            \
-    void   (*clear)(struct array_##type*);                           \
-    void   (*reserve)(struct array_##type*, size_t);                 \
-    void   (*shrink)(struct array_##type*);                          \
+#define ARRAY(type) typedef struct array_##type           \
+{                                                         \
+    type*  _array;                                        \
+    size_t _elements;                                     \
+    size_t _capacity;                                     \
+    size_t _type_size;                                    \
+    void   (*push_back)(struct array_##type*, type);      \
+    void   (*insert)(struct array_##type*, type, size_t); \
+    void   (*pop_back)(struct array_##type*);             \
+    size_t (*erase)(struct array_##type*, size_t);        \
+    type   (*front)(struct array_##type*);                \
+    type   (*back)(struct array_##type*);                 \
+    type   (*get)(struct array_##type*, size_t);          \
+    bool   (*empty)(struct array_##type*);                \
+    size_t (*size)(struct array_##type*);                 \
+    void   (*clear)(struct array_##type*);                \
+    void   (*reserve)(struct array_##type*, size_t);      \
+    void   (*shrink)(struct array_##type*);               \
 } array_##type;                                                             \
                                                                             \
 void array_push_##type(struct array_##type* arr, type elem)                 \
@@ -88,10 +88,8 @@ void array_push_##type(struct array_##type* arr, type elem)                 \
         arr->_capacity = (arr->_capacity > 0) ?                             \
             arr->_capacity * GROW_FACTOR : ARRAY_MIN;                       \
                                                                             \
-        type* tmp = realloc(arr->_array, arr->_elem_size * arr->_capacity); \
-                                                                            \
+        type* tmp = realloc(arr->_array, arr->_type_size * arr->_capacity); \
         assert(tmp != NULL);                                                \
-                                                                            \
         arr->_array = tmp;                                                  \
     }                                                                       \
     arr->_array[arr->_elements] = elem;                                     \
@@ -104,7 +102,7 @@ void array_insert_##type(struct array_##type* arr, type elem, size_t index) \
     {                                                                       \
         arr->_capacity = (arr->_capacity > 0) ?                             \
             arr->_capacity * GROW_FACTOR : ARRAY_MIN;                       \
-        type* tmp = realloc(arr->_array, arr->_elem_size * arr->_capacity); \
+        type* tmp = realloc(arr->_array, arr->_type_size * arr->_capacity); \
                                                                             \
         assert(tmp != NULL);                                                \
                                                                             \
@@ -122,7 +120,7 @@ void array_insert_##type(struct array_##type* arr, type elem, size_t index) \
     {                                                                       \
         type *source = &arr->_array[index];                                 \
         type *destination = &arr->_array[index + 1];                        \
-        size_t amount = (arr->_elements - index) * arr->_elem_size;         \
+        size_t amount = (arr->_elements - index) * arr->_type_size;         \
         memmove(destination, source, amount);                               \
         arr->_array[index] = elem;                                          \
         arr->_elements++;                                                   \
@@ -147,7 +145,7 @@ size_t array_erase_##type(struct array_##type* arr, size_t index)           \
     {                                                                       \
         type *source = &arr->_array[index + 1];                             \
         type *destination = &arr->_array[index];                            \
-        size_t amount = (arr->_elements - index) * arr->_elem_size;         \
+        size_t amount = (arr->_elements - index) * arr->_type_size;         \
         memmove(destination, source, amount);                               \
         arr->_elements--;                                                   \
         return index - 1;                                                   \
@@ -187,7 +185,7 @@ void array_clear_##type(struct array_##type* arr)                           \
     free(arr->_array);                                                      \
     arr->_elements = 0;                                                     \
     arr->_capacity = 0;                                                     \
-    arr->_array = calloc(arr->_capacity, arr->_elem_size);                  \
+    arr->_array = calloc(arr->_capacity, arr->_type_size);                  \
 }                                                                           \
                                                                             \
 void array_reserve_##type(struct array_##type* arr, size_t amount)          \
@@ -195,7 +193,7 @@ void array_reserve_##type(struct array_##type* arr, size_t amount)          \
     assert(amount > arr->_capacity);                                        \
                                                                             \
     arr->_capacity = (arr->_capacity > 0) ? arr->_capacity * 2 : 1;         \
-    type* tmp = realloc(arr->_array, arr->_elem_size * amount);             \
+    type* tmp = realloc(arr->_array, arr->_type_size * amount);             \
                                                                             \
     assert(tmp != NULL);                                                    \
                                                                             \
@@ -208,7 +206,7 @@ void array_shrink_##type(struct array_##type* arr)                          \
         return;                                                             \
                                                                             \
     arr->_capacity = arr->_elements;                                        \
-    type* tmp = realloc(arr->_array, arr->_elem_size * arr->_capacity);     \
+    type* tmp = realloc(arr->_array, arr->_type_size * arr->_capacity);     \
                                                                             \
     assert(tmp != NULL);                                                    \
                                                                             \
