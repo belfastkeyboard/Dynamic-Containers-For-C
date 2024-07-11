@@ -36,6 +36,9 @@
 #include <assert.h>
 #include <stdbool.h>
 
+// test
+// sup
+
 #define constructor_stack(type) {                                                                   \
     ._elements = 0, ._capacity = 0, ._elem_size = sizeof(type), ._array = malloc(sizeof(type) * 0), \
     .push_##type = stack_push_##type,                                                               \
