@@ -25,7 +25,7 @@
         return 0;
     }
 
-    Do not manually modify: _elements, _capacity, _elem_size, or _array.
+    Do not manually modify: _elements, _capacity, _type_size, or _array.
     Use function pointers to do so.
 
 */
@@ -47,7 +47,7 @@
 #define STACK_MIN 1
 
 #define constructor_stack(type) {                                                                   \
-    ._elements = 0, ._capacity = 0, ._elem_size = sizeof(type), ._array = calloc(0, sizeof(type)),  \
+    ._elements = 0, ._capacity = 0, ._type_size = sizeof(type), ._array = calloc(0, sizeof(type)),  \
     .push = stack_push_##type,                                                                      \
     .pop = stack_pop_##type,                                                                        \
     .top = stack_top_##type,                                                                        \
@@ -59,7 +59,7 @@
         item._array = NULL;  \
         item._elements = 0;  \
         item._capacity = 0;  \
-        item._elem_size = 0;
+        item._type_size = 0;
 #endif
 
 #define STACK(type) typedef struct stack_##type                             \
@@ -67,7 +67,7 @@
     type*  _array;                                                          \
     size_t _elements;                                                       \
     size_t _capacity;                                                       \
-    size_t _elem_size;                                                      \
+    size_t _type_size;                                                      \
     void   (*push)(struct stack_##type*, type);                             \
     void   (*pop)(struct stack_##type*);                                    \
     type   (*top)(struct stack_##type*);                                    \
@@ -82,7 +82,7 @@ void stack_push_##type(struct stack_##type* stk, type elem)                 \
         stk->_capacity = (stk->_capacity > 0) ?                             \
             stk->_capacity * GROW_FACTOR : STACK_MIN;                       \
                                                                             \
-        type* tmp = realloc(stk->_array, stk->_elem_size * stk->_capacity); \
+        type* tmp = realloc(stk->_array, stk->_type_size * stk->_capacity); \
         assert(tmp != NULL);                                                \
         stk->_array = tmp;                                                  \
     }                                                                       \
