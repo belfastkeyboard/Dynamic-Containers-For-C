@@ -1,5 +1,7 @@
 // Queue implementation in C based on C++ vector implementation
 
+// TODO: test
+
 /*  HOW TO USE:
 
     Call QUEUE(type) with the desired type, multiple types can be used.
