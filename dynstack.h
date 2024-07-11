@@ -40,6 +40,12 @@
 #include <assert.h>
 #include <stdbool.h>
 
+#undef GROW_FACTOR
+#undef STACK_MIN
+
+#define GROW_FACTOR 2
+#define STACK_MIN 1
+
 #define constructor_stack(type) {                                                                   \
     ._elements = 0, ._capacity = 0, ._elem_size = sizeof(type), ._array = calloc(0, sizeof(type)),  \
     .push = stack_push_##type,                                                                      \
@@ -74,7 +80,7 @@ void stack_push_##type(struct stack_##type* stk, type elem)                 \
     if (stk->_elements >= stk->_capacity)                                   \
     {                                                                       \
         stk->_capacity = (stk->_capacity > 0) ?                             \
-            stk->_capacity * GROW_FACTOR : ARRAY_MIN;                       \
+            stk->_capacity * GROW_FACTOR : STACK_MIN;                       \
                                                                             \
         type* tmp = realloc(stk->_array, stk->_elem_size * stk->_capacity); \
         assert(tmp != NULL);                                                \
