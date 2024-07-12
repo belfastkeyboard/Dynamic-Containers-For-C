@@ -6,94 +6,143 @@
 #include <stdbool.h>
 #include <assert.h>
 
+#undef GROW_FACTOR
+#undef SHRINK_FACTOR
+
 #define GROW_FACTOR 2.f
 #define SHRINK_FACTOR 0.5f
 #define MIN_SET 8
 #define LOW_LOAD_FACTOR 0.1f
 #define HIGH_LOAD_FACTOR 0.75f
+#define INVALID -1
+
+#define set_constructor(type)                                                \
+{                                                                            \
+    ._array = malloc(sizeof(SetBucket) * 0),                                 \
+    ._capacity = 0, ._elements = 0, ._type_size = sizeof(type),              \
+    ._cmp = compare_general, ._hash = hash_general,                          \
+    .insert = insert, .erase = erase, .clear = clear,                        \
+    .contains = contains, .empty = empty, .size = size, .capacity = capacity \
+}
 
 // CONSIDER: cpp-reference specifies red-black trees as typical set implementation
+//  I hate trees, this implementation is very similar to a hash table but without key-value pairs
 
-/* TODO: implement the below functions (if match C++ impl):
- *
- * set-theoretical functions:
- *  union(S,T): returns the union of sets S and T.
- *  intersection(S,T): returns the intersection of sets S and T.
- *  difference(S,T): returns the difference of sets S and T.
- *  subset(S,T): a predicate that tests whether the set S is a subset of set T.
- *
- * static set functions:
- *  iterate(S): returns a function that returns one more value of S at each call, in some arbitrary order.
- *  enumerate(S): returns a list containing the elements of S in some arbitrary order.
- *  build(x1,x2,…,xn,): creates a set structure with values x1,x2,...,xn.
- *  create_from(collection): creates a new set structure containing all the elements of the given collection or all the elements returned by the given iterator.
- *
- * dynamic set functions:
- *  create(): creates a new, initially empty set structure.
- *  create_with_capacity(n): creates a new set structure, initially empty but capable of holding up to n elements.
- *
- * c++ impl:
- *  swap(): swap the contents of one set with another.
- */
-
-typedef struct SetBucket
+// slightly modified version of djb2 algorithm to allow handling of null terminators (e.g. hash an int 0)
+// there are other ways to accomplish this (e.g. snprintf) but this method is simple and general purpose
+unsigned long djb2(const unsigned char *str, size_t len)
 {
-    unsigned int hash;
-    int value;
-    bool tombstone;
-} SetBucket;
+    unsigned long hash = 5381;
 
-typedef struct Set
-{
-    SetBucket* buckets;
-    size_t capacity;
-    size_t elements;
-} Set;
+    for (int i = 0; i < len; i++)
+        hash = ((hash << 5) + hash) + str[i];
 
-static inline unsigned int get_index(unsigned int hash, size_t capacity)
+    return hash;
+}
+inline unsigned int get_index(unsigned long hash, size_t capacity)
 {
     return hash % capacity;
 }
 
-// implementation (slightly modified) of Bernstein's dbj2 algorithm
-static unsigned int dbj_hash(int item, size_t len)
-{
-    unsigned long hash = 5381;
-    unsigned char data[len];
+// TODO: make generic
 
+typedef struct SetBucket
+{
+    unsigned long hash;
+    int value;
+    bool tombstone;
+} SetBucket;
+typedef struct Set
+{
+    SetBucket* _array;
+    size_t _capacity;
+    size_t _elements;
+    size_t _type_size;
+
+    // these function pointers are plug-n-play
+    // for structs or other complex comparisons/hashes
+    // they can be substituted with custom functions
+    bool (*_cmp)(int, int);
+    unsigned long (*_hash)(int);
+
+    void (*insert)(struct Set*, int);
+    void (*erase)(struct Set*, int);
+    bool (*contains)(struct Set*, int);
+    bool (*empty)(struct Set*);
+    size_t (*size)(struct Set*);
+    size_t (*capacity)(struct Set*);
+    void (*clear)(struct Set*);
+} Set;
+typedef struct SetIterator
+{
+    Set* set;
+    int index;
+} SetIterator;
+
+
+// plug-n-play functions <--> can be swapped out for custom functions if needed
+bool compare_general(int a, int b)
+{
+    return a == b;
+}
+bool compare_string(const char* a, const char* b)
+{
+    return !strcmp(a, b);
+}
+unsigned long hash_general(int item)
+{
+    size_t len = sizeof(item);
+    unsigned char data[len];
     memcpy(data, &item, len);
 
-    for (size_t i = 0; i < len; i++) {
-        hash = ((hash << 5) + hash) + data[i]; // hash * 33 + data[i]
+    return djb2(data, len);
+}
+unsigned long hash_string(const char* item)
+{
+    size_t len = strlen(item);
+    unsigned char data[len];
+    memcpy(data, &item, len);
+
+    return djb2(data, len);
+}
+
+
+// helper functions
+int helper_iterate(SetIterator *iterator, SetBucket *bucket)
+{
+    assert(iterator != NULL);
+
+    for (int i = iterator->index; i < iterator->set->_capacity; i++)
+    {
+        *bucket = iterator->set->_array[i];
+
+        if (bucket->hash == INVALID || bucket->tombstone)
+            continue;
+
+        iterator->index++;
+        return true;
     }
-    return hash;
-}
 
-// replace with custom comparison for structs etc.
-static inline bool compare(int a, int b)
-{
-    return (a == b);
+    return false;
 }
-
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "NullDereference"
-// seems to be an IDE problem
-unsigned int linear_probe(Set* set, int value, unsigned int index, bool skip_tombstones)
+unsigned int helper_linear_probe(Set* set, int value, unsigned int index, bool skip_tombstones)
 {
+    assert(set && set->_array);
+
     unsigned int found = -1;
     unsigned int tombstone = -1;
 
-    while (set->buckets[index].hash != -1)
+    while (set->_array[index].hash != -1)
     {
-        if (index >= set->capacity)
+        if (index >= set->_capacity)
         {
             index = 0;
         }
-        else if (skip_tombstones && set->buckets[index].tombstone && tombstone == -1)
+        else if (skip_tombstones && set->_array[index].tombstone && tombstone == INVALID) // ????? tombstone == INVALID ????
         {
             tombstone = index;
         }
-        else if (set->buckets[index].value == value || !skip_tombstones && set->buckets[index].tombstone)
+        else if (set->_cmp(set->_array[index].value, value)  || !skip_tombstones && set->_array[index].tombstone)
         {
             found = index;
             break;
@@ -108,144 +157,204 @@ unsigned int linear_probe(Set* set, int value, unsigned int index, bool skip_tom
     {
         found = index;
     }
-    else if (tombstone != -1 && found != -1)
+    else if (tombstone != INVALID && found != INVALID)
     {
-        set->buckets[tombstone].value = set->buckets[found].value;
-        set->buckets[tombstone].tombstone = false;
-        set->buckets[found].value = -1;
-        set->buckets[found].tombstone = true;
+        set->_array[tombstone].value = set->_array[found].value;
+        set->_array[tombstone].tombstone = false;
+        set->_array[found].value = INVALID;
+        set->_array[found].tombstone = true;
 
         found = tombstone;
     }
 
     return found;
 }
-#pragma clang diagnostic pop
-
-void resize(Set* set, float factor)
+void helper_resize(Set* set, float factor)
 {
-    size_t size = sizeof(SetBucket) * set->capacity;
-    size_t capacity = set->capacity;
+    size_t size = sizeof(SetBucket) * set->_capacity;
+    size_t capacity = set->_capacity;
 
     SetBucket* tmp = malloc(size);
-    memcpy(tmp, set->buckets, size);
-    free(set->buckets);
+    memcpy(tmp, set->_array, size);
+    free(set->_array);
 
-    set->capacity = (size_t)((float)set->capacity * factor);
-    set->buckets = malloc(sizeof(SetBucket) * set->capacity);
-    memset(set->buckets, -1, (size_t)((float)size * factor));
+    set->_capacity = (size_t)((float)set->_capacity * factor);
+    set->_array = malloc(sizeof(SetBucket) * set->_capacity);
+    memset(set->_array, INVALID, (size_t)((float)size * factor));
 
     for (int i = 0; i < capacity; i++)
     {
         SetBucket bucket = tmp[i];
 
-        if (bucket.hash == -1 || bucket.tombstone)
+        if (bucket.hash == INVALID || bucket.tombstone)
             continue;
 
-        unsigned int re_index = get_index(bucket.hash, set->capacity);
-        re_index = linear_probe(set, bucket.value, re_index, false);
-        set->buckets[re_index] = bucket;
+        unsigned int re_index = get_index(bucket.hash, set->_capacity);
+        re_index = helper_linear_probe(set, bucket.value, re_index, false);
+        set->_array[re_index] = bucket;
     }
 
     free(tmp);
 }
 
-unsigned int insert(Set* set, int value, size_t len)
+
+
+// member functions
+void insert(Set* set, int value)
 {
-    if (set->elements == 0)
+    if (set->_elements == 0)
     {
-        set->capacity = MIN_SET;
-        free(set->buckets);
-        set->buckets = malloc(sizeof(SetBucket) * set->capacity);
-        memset(set->buckets, -1, set->capacity * sizeof(SetBucket));
+        set->_capacity = MIN_SET;
+        free(set->_array);
+        set->_array = malloc(sizeof(SetBucket) * set->_capacity);
+        memset(set->_array, -1, set->_capacity * sizeof(SetBucket));
     }
     else
     {
-        float load_factor = ((float)set->elements / (float)set->capacity);
+        float load_factor = ((float)set->_elements / (float)set->_capacity);
         if (load_factor >= HIGH_LOAD_FACTOR)
-            resize(set, GROW_FACTOR);
+            helper_resize(set, GROW_FACTOR);
     }
 
-    unsigned int hash = dbj_hash(value, len);
-    unsigned int index = get_index(hash, set->capacity);
+    unsigned long hash = set->_hash(value);
+    unsigned int index = get_index(hash, set->_capacity);
 
-    index = linear_probe(set, value, index, false);
+    index = helper_linear_probe(set, value, index, false);
 
-    if (set->buckets[index].value != value)
-        set->elements++;
+    if (set->_array[index].value != value)
+        set->_elements++;
 
     SetBucket bucket = {hash, value, false };
-    set->buckets[index] = bucket;
+    set->_array[index] = bucket;
+}
+void erase(Set* set, int value)
+{
+    assert(set->_elements > 0);
 
-    return index;
+    unsigned long hash = set->_hash(value);
+    unsigned int index = get_index(hash, set->_capacity);
+
+    index = helper_linear_probe(set, value, index, true);
+    if (index != -1)
+    {
+        set->_array[index].value = -1;
+        set->_array[index].tombstone = true;
+        set->_elements--;
+    }
+
+    float load_factor = ((float)set->_elements / (float)set->_capacity);
+    if (load_factor <= LOW_LOAD_FACTOR)
+        helper_resize(set, SHRINK_FACTOR);
+}
+void clear(Set* set)
+{
+    free(set->_array);
+    set->_capacity = 0;
+    set->_elements = 0;
+    set->_array = malloc(sizeof(SetBucket) * 0);
 }
 
-void erase(Set* set, int value, size_t len)
+bool contains(Set* set, int value)
 {
-    if (set->elements == 0)
+    unsigned long hash = set->_hash(value);
+    unsigned int index = get_index(hash, set->_capacity);
+
+    index = helper_linear_probe(set, value, index, true);
+    return index != -1;
+}
+bool empty(Set* set)
+{
+    return (set->_elements == 0);
+}
+size_t size(Set* set)
+{
+    return set->_elements;
+}
+size_t capacity(Set* set)
+{
+    return set->_capacity;
+}
+
+
+
+// set-theoretical functions:
+bool set_is_subset(Set* a, Set* b)
+{
+    bool subset = true;
+
+    if (a->_elements > b->_elements)
     {
-        set->capacity = MIN_SET;
-        free(set->buckets);
-        set->buckets = malloc(sizeof(SetBucket) * set->capacity);
-        memset(set->buckets, -1, set->capacity * sizeof(SetBucket));
+        subset = false;
     }
     else
     {
-        float load_factor = ((float)set->elements / (float)set->capacity);
-        if (load_factor <= LOW_LOAD_FACTOR)
-            resize(set, SHRINK_FACTOR);
+        SetBucket bucket = { 0 };
+        SetIterator iter = { a, 0 };
+
+        while(helper_iterate(&iter, &bucket))
+        {
+            if (contains(b, bucket.value))
+                continue;
+
+            subset = false;
+            break;
+        }
     }
 
-    unsigned int hash = dbj_hash(value, len);
-    unsigned int index = get_index(hash, set->capacity);
+    return subset;
+}
+Set set_union(Set* a, Set* b)
+{
+    Set c = set_constructor(int);
 
-    index = linear_probe(set, value, index, true);
-    if (index != -1)
+    SetBucket bucket = { 0 };
+    SetIterator iter = { a, 0 };
+    while(helper_iterate(&iter, &bucket))
     {
-        set->buckets[index].value = -1;
-        set->buckets[index].tombstone = true;
-        set->elements--;
+        insert(&c, bucket.value);
     }
-}
+    iter.set = b;
+    iter.index = 0;
+    while(helper_iterate(&iter, &bucket))
+    {
+        insert(&c, bucket.value);
+    }
 
-bool find(Set* set, int value, size_t len)
+    return c;
+}
+Set set_difference(Set* a, Set* b)
 {
-    unsigned int hash = dbj_hash(value, len);
-    unsigned int index = get_index(hash, set->capacity);
+    Set c = set_constructor(int);
 
-    return linear_probe(set, value, index, true);
+    SetBucket bucket = { 0 };
+    SetIterator iter = { b, 0 };
+    while(helper_iterate(&iter, &bucket))
+    {
+        if (contains(a, bucket.value))
+            continue;
+
+        c.insert(&c, bucket.value);
+    }
+
+    return c;
 }
-
-bool contains(Set* set, int value, size_t len)
+Set set_intersection(Set* a, Set* b)
 {
-    unsigned int hash = dbj_hash(value, len);
-    unsigned int index = get_index(hash, set->capacity);
+    Set c = set_constructor(int);
 
-    index = linear_probe(set, value, index, true);
-    return index != -1;
-}
+    SetBucket bucket = { 0 };
+    SetIterator iter = { a, 0 };
+    while(helper_iterate(&iter, &bucket))
+    {
+        if (contains(b, bucket.value))
+            insert(&c, bucket.value);
+    }
 
-inline bool empty(Set* set)
-{
-    return (set->elements == 0);
-}
-
-inline size_t size(Set* set)
-{
-    return set->elements;
-}
-
-inline size_t capacity(Set* set)
-{
-    return set->capacity;
-}
-
-void clear(Set* set)
-{
-    free(set->buckets);
-    set->capacity = 0;
-    set->elements = 0;
-    malloc(sizeof(SetBucket) * 0);
+    return c;
 }
 
 
+#undef MIN_SET
+#undef LOW_LOAD_FACTOR
+#undef HIGH_LOAD_FACTOR
+#undef INVALID
