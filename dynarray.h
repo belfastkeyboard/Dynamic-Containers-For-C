@@ -44,7 +44,6 @@
 #define GROW_FACTOR 2
 #define ARRAY_MIN 1
 
-// is there a need for _##type on the function pointer names?
 #define constructor_array(type)                                                                    \
 {                                                                                                  \
     ._elements = 0, ._capacity = 0, ._type_size = sizeof(type), ._array = calloc(0, sizeof(type)), \
@@ -64,7 +63,8 @@
         item._type_size = 0;
 #endif
 
-#define ARRAY(type) typedef struct array_##type           \
+#define ARRAY(type)                                       \
+typedef struct array_##type                               \
 {                                                         \
     type*  _array;                                        \
     size_t _elements;                                     \
