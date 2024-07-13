@@ -84,42 +84,45 @@ unsigned long hash_string(const char* item)
     return djb2(data, len);
 }
 
-#define SET(type) type                                                                            \
+#define M_BUCKET(type) JOIN(SetBucket, type)
+#define M_SET(type) JOIN(Set, type)
+#define M_ITER(type) JOIN(SetIterator, type)
+
+#define SET(type)                                                                                 \
                                                                                                   \
-typedef struct JOIN(SetBucket, type)                                                              \
+typedef struct M_BUCKET(type)                                                                     \
 {                                                                                                 \
     unsigned long hash;                                                                           \
-    int value;                                                                                    \
+    type value;                                                                                   \
     bool tombstone;                                                                               \
-} JOIN(SetBucket, type);                                                                          \
+} M_BUCKET(type);                                                                                 \
                                                                                                   \
-typedef struct JOIN(Set, type)                                                                    \
+typedef struct M_SET(type)                                                                        \
 {                                                                                                 \
-    SetBucket* _array;                                                                            \
+    M_BUCKET(type)* _array;                                                                       \
     size_t _capacity;                                                                             \
     size_t _elements;                                                                             \
     size_t _type_size;                                                                            \
                                                                                                   \
-    // plug-n-play function pointers                                                              \
-    bool (*_cmp)(int, int);                                                                       \
-    unsigned long (*_hash)(int);                                                                  \
+    bool (*_cmp)(type, type);                                                                     \
+    unsigned long (*_hash)(type);                                                                 \
                                                                                                   \
-    void (*insert)(struct Set*, int);                                                             \
-    void (*erase)(struct Set*, int);                                                              \
-    bool (*contains)(struct Set*, int);                                                           \
-    bool (*empty)(struct Set*);                                                                   \
-    size_t (*size)(struct Set*);                                                                  \
-    size_t (*capacity)(struct Set*);                                                              \
-    void (*clear)(struct Set*);                                                                   \
-} JOIN(Set, type);                                                                                \
+    void (*insert)(struct M_SET(type)*, type);                                                    \
+    void (*erase)(struct M_SET(type)*, type);                                                     \
+    bool (*contains)(struct M_SET(type)*, type);                                                  \
+    bool (*empty)(struct M_SET(type)*);                                                           \
+    size_t (*size)(struct M_SET(type)*);                                                          \
+    size_t (*capacity)(struct M_SET(type)*);                                                      \
+    void (*clear)(struct M_SET(type)*);                                                           \
+} M_SET(type);                                                                                    \
                                                                                                   \
-typedef struct JOIN(SetIterator, type)                                                            \
+typedef struct M_ITER(type)                                                                       \
 {                                                                                                 \
-    Set* set;                                                                                     \
+    M_SET(type)* set;                                                                             \
     int index;                                                                                    \
-} JOIN(SetIterator, type);                                                                        \
+} M_ITER(type);                                                                                   \
                                                                                                   \
-bool JOIN(h_iterate, type)(JOIN(SetIterator, type) *iterator, JOIN(SetBucket, type) *bucket)      \
+bool JOIN(h_iterate, type)(M_ITER(type) *iterator, M_BUCKET(type) *bucket)                        \
 {                                                                                                 \
     assert(iterator != NULL);                                                                     \
                                                                                                   \
@@ -138,7 +141,7 @@ bool JOIN(h_iterate, type)(JOIN(SetIterator, type) *iterator, JOIN(SetBucket, ty
 }                                                                                                 \
                                                                                                   \
 unsigned int                                                                                      \
-JOIN(h_lprobe, type)(JOIN(Set, type)* set, int value, unsigned int index, bool skip_tombstones)   \
+JOIN(h_lprobe, type)(M_SET(type)* set, int value, unsigned int index, bool skip_tombstones)       \
 {                                                                                                 \
     assert(set && set->_array);                                                                   \
                                                                                                   \
@@ -184,43 +187,39 @@ JOIN(h_lprobe, type)(JOIN(Set, type)* set, int value, unsigned int index, bool s
     return found;                                                                                 \
 }                                                                                                 \
                                                                                                   \
-void h_resize(JOIN(Set, type)* set, float factor)                                                 \
+void JOIN(h_resize, type)(M_SET(type)* set, float factor)                                         \
 {                                                                                                 \
-    size_t size = sizeof(SetBucket) * set->_capacity;                                             \
+    size_t size = sizeof(M_BUCKET(type)) * set->_capacity;                                        \
     size_t capacity = set->_capacity;                                                             \
                                                                                                   \
-    SetBucket* tmp = malloc(size);                                                                \
+    M_BUCKET(type)* tmp = malloc(size);                                                           \
     memcpy(tmp, set->_array, size);                                                               \
     free(set->_array);                                                                            \
                                                                                                   \
     set->_capacity = (size_t)((float)set->_capacity * factor);                                    \
-    set->_array = malloc(sizeof(SetBucket) * set->_capacity);                                     \
+    set->_array = malloc(sizeof(M_BUCKET(type)) * set->_capacity);                                \
     memset(set->_array, INVALID, (size_t)((float)size * factor));                                 \
                                                                                                   \
-    for (int i = 0; i < capacity; i++)                                                            \
+    M_BUCKET(type) bucket = { 0 };                                                                \
+    M_ITER(type) iter = { set, 0 };                                                               \
+    while (JOIN(h_iterate, type)(&iter, &bucket))                                                 \
     {                                                                                             \
-        SetBucket bucket = tmp[i];                                                                \
-                                                                                                  \
-        if (bucket.hash == INVALID || bucket.tombstone)                                           \
-            continue;                                                                             \
-                                                                                                  \
         unsigned int re_index = get_index(bucket.hash, set->_capacity);                           \
-        re_index = h_lprobe(set, bucket.value, re_index, false);                                  \
+        re_index = JOIN(h_lprobe, type)(set, bucket.value, re_index, false);                      \
         set->_array[re_index] = bucket;                                                           \
     }                                                                                             \
                                                                                                   \
     free(tmp);                                                                                    \
 }                                                                                                 \
                                                                                                   \
-// member functions                                                                               \
-void JOIN(insert, type)(JOIN(Set, type)* set, int value)                                          \
+void JOIN(insert, type)(M_SET(type)* set, type value)                                             \
 {                                                                                                 \
     if (set->_elements == 0)                                                                      \
     {                                                                                             \
         set->_capacity = MIN_SET;                                                                 \
         free(set->_array);                                                                        \
-        set->_array = malloc(sizeof(JOIN(SetBucket, type)) * set->_capacity);                     \
-        memset(set->_array, -1, set->_capacity * sizeof(JOIN(SetBucket, type)));                  \
+        set->_array = malloc(sizeof(M_BUCKET(type)) * set->_capacity);                            \
+        memset(set->_array, -1, set->_capacity * sizeof(M_BUCKET(type)));                         \
     }                                                                                             \
     else                                                                                          \
     {                                                                                             \
@@ -237,17 +236,18 @@ void JOIN(insert, type)(JOIN(Set, type)* set, int value)                        
     if (set->_array[index].value != value)                                                        \
         set->_elements++;                                                                         \
                                                                                                   \
-    JOIN(SetBucket, type) bucket = {hash, value, false };                                         \
+    M_BUCKET(type) bucket = {hash, value, false };                                                \
     set->_array[index] = JOIN(bucket, type);                                                      \
 }                                                                                                 \
-void JOIN(erase, type)(JOIN(Set, type)* set, int value)                                           \
+                                                                                                  \
+void JOIN(erase, type)(M_SET(type)* set, int value)                                               \
 {                                                                                                 \
     assert(set->_elements > 0);                                                                   \
                                                                                                   \
     unsigned long hash = set->_hash(value);                                                       \
     unsigned int index = get_index(hash, set->_capacity);                                         \
                                                                                                   \
-    index = h_lprobe(set, value, index, true);                                                    \
+    index = JOIN(h_lprobe, type)(set, value, index, true);                                        \
     if (index != -1)                                                                              \
     {                                                                                             \
         set->_array[index].value = -1;                                                            \
@@ -257,17 +257,18 @@ void JOIN(erase, type)(JOIN(Set, type)* set, int value)                         
                                                                                                   \
     float load_factor = ((float)set->_elements / (float)set->_capacity);                          \
     if (load_factor <= LOW_LOAD_FACTOR)                                                           \
-        h_resize(set, SHRINK_FACTOR);                                                             \
+        JOIN(h_resize, type)(set, SHRINK_FACTOR);                                                 \
 }                                                                                                 \
-void JOIN(clear, type)(JOIN(Set, type)* set)                                                      \
+                                                                                                  \
+void JOIN(clear, type)(M_SET(type)* set)                                                          \
 {                                                                                                 \
     free(set->_array);                                                                            \
     set->_capacity = 0;                                                                           \
     set->_elements = 0;                                                                           \
-    set->_array = malloc(sizeof(JOIN(SetBucket, type)) * 0);                                      \
+    set->_array = malloc(sizeof(M_BUCKET(type)) * 0);                                             \
 }                                                                                                 \
                                                                                                   \
-bool JOIN(contains, type)(JOIN(Set, type)* set, int value)                                        \
+bool JOIN(contains, type)(M_SET(type)* set, int value)                                            \
 {                                                                                                 \
     unsigned long hash = set->_hash(value);                                                       \
     unsigned int index = get_index(hash, set->_capacity);                                         \
@@ -275,15 +276,18 @@ bool JOIN(contains, type)(JOIN(Set, type)* set, int value)                      
     index = JOIN(h_lprobe, type)(set, value, index, true);                                        \
     return index != -1;                                                                           \
 }                                                                                                 \
-bool JOIN(empty, type)(JOIN(Set, type)* set)                                                      \
+                                                                                                  \
+bool JOIN(empty, type)(M_SET(type)* set)                                                          \
 {                                                                                                 \
     return (set->_elements == 0);                                                                 \
 }                                                                                                 \
-size_t JOIN(size, type)(JOIN(Set, type)* set)                                                     \
+                                                                                                  \
+size_t JOIN(size, type)(M_SET(type)* set)                                                         \
 {                                                                                                 \
     return set->_elements;                                                                        \
 }                                                                                                 \
-size_t JOIN(capacity, type)(JOIN(Set, type)* set)                                                 \
+                                                                                                  \
+size_t JOIN(capacity, type)(M_SET(type)* set)                                                     \
 {                                                                                                 \
     return set->_capacity;                                                                        \
 }                                                                                                 \
@@ -291,7 +295,7 @@ size_t JOIN(capacity, type)(JOIN(Set, type)* set)                               
                                                                                                   \
                                                                                                   \
 // set-theoretical functions:                                                                     \
-bool JOIN(set_is_subset, type)(JOIN(Set, type)* a, JOIN(Set, type)* b)                            \
+bool JOIN(set_is_subset, type)(M_SET(type)* a, M_SET(type)* b)                                    \
 {                                                                                                 \
     bool subset = true;                                                                           \
                                                                                                   \
@@ -301,8 +305,8 @@ bool JOIN(set_is_subset, type)(JOIN(Set, type)* a, JOIN(Set, type)* b)          
     }                                                                                             \
     else                                                                                          \
     {                                                                                             \
-        JOIN(SetBucket, type) bucket = { 0 };                                                     \
-        JOIN(SetIterator, type) iter = { a, 0 };                                                  \
+        M_BUCKET(type) bucket = { 0 };                                                            \
+        M_ITER(type) iter = { a, 0 };                                                             \
                                                                                                   \
         while(JOIN(h_iterate, type)(&iter, &bucket))                                              \
         {                                                                                         \
@@ -317,19 +321,19 @@ bool JOIN(set_is_subset, type)(JOIN(Set, type)* a, JOIN(Set, type)* b)          
     return subset;                                                                                \
 }                                                                                                 \
                                                                                                   \
-JOIN(Set, type) JOIN(set_union, type)((JOIN(Set, type)* a, JOIN(Set, type)* b)                    \
+M_SET(type) JOIN(set_union, type)((M_SET(type)* a, M_SET(type)* b)                                \
 {                                                                                                 \
-    JOIN(Set, type) c = set_constructor(int);                                                     \
+    M_SET(type) c = set_constructor(int);                                                         \
                                                                                                   \
-    JOIN(SetBucket, type) bucket = { 0 };                                                         \
-    JOIN(SetIterator, type) iter = { a, 0 };                                                      \
-    while(h_iterate(&iter, &bucket))                                                              \
+    M_BUCKET(type) bucket = { 0 };                                                                \
+    M_ITER(type) iter = { a, 0 };                                                                 \
+    while(JOIN(h_iterate, type)(&iter, &bucket))                                                  \
     {                                                                                             \
         c.insert(&c, bucket.value);                                                               \
     }                                                                                             \
     iter.set = b;                                                                                 \
     iter.index = 0;                                                                               \
-    while(h_iterate(&iter, &bucket))                                                              \
+    while(JOIN(h_iterate, type)(&iter, &bucket))                                                  \
     {                                                                                             \
         c.insert(&c, bucket.value);                                                               \
     }                                                                                             \
@@ -337,13 +341,13 @@ JOIN(Set, type) JOIN(set_union, type)((JOIN(Set, type)* a, JOIN(Set, type)* b)  
     return c;                                                                                     \
 }                                                                                                 \
                                                                                                   \
-JOIN(Set, type) JOIN(set_difference, type)(JOIN(Set, type)* a, JOIN(Set, type)* b)                \
+M_SET(type) JOIN(set_difference, type)(M_SET(type)* a, M_SET(type)* b)                            \
 {                                                                                                 \
-    JOIN(Set, type) c = set_constructor(int);                                                     \
+    M_SET(type) c = set_constructor(int);                                                         \
                                                                                                   \
-    JOIN(SetBucket, type) bucket = { 0 };                                                         \
-    JOIN(SetIterator, type) iter = { b, 0 };                                                      \
-    while(h_iterate(&iter, &bucket))                                                              \
+    M_BUCKET(type) bucket = { 0 };                                                                \
+    M_ITER(type) iter = { b, 0 };                                                                 \
+    while(JOIN(h_iterate, type)(&iter, &bucket))                                                  \
     {                                                                                             \
         if (a.contains(a, bucket.value))                                                          \
             continue;                                                                             \
@@ -354,13 +358,13 @@ JOIN(Set, type) JOIN(set_difference, type)(JOIN(Set, type)* a, JOIN(Set, type)* 
     return c;                                                                                     \
 }                                                                                                 \
                                                                                                   \
-JOIN(Set, type) JOIN(set_intersection, type)(JOIN(Set, type)* a, JOIN(Set, type)* b)              \
+M_SET(type) JOIN(set_intersection, type)(M_SET(type)* a, M_SET(type)* b)                          \
 {                                                                                                 \
-    JOIN(Set, type) c = set_constructor(int);                                                     \
+    M_SET(type) c = set_constructor(int);                                                         \
                                                                                                   \
-    JOIN(SetBucket, type) bucket = { 0 };                                                         \
-    JOIN(SetIterator, type) iter = { a, 0 };                                                      \
-    while(h_iterate(&iter, &bucket))                                                              \
+    M_BUCKET(type) bucket = { 0 };                                                                \
+    M_ITER(type) iter = { a, 0 };                                                                 \
+    while(JOIN(h_iterate, type)(&iter, &bucket))                                                  \
     {                                                                                             \
         if (b.contains(b, bucket.value))                                                          \
             c.insert(&c, bucket.value);                                                           \
@@ -369,7 +373,9 @@ JOIN(Set, type) JOIN(set_intersection, type)(JOIN(Set, type)* a, JOIN(Set, type)
     return c;                                                                                     \
 }                                                                                                 \
 
-
+#undef M_SET
+#undef M_BUCKET
+#undef M_ITER
 #undef MIN_SET
 #undef LOW_LOAD_FACTOR
 #undef HIGH_LOAD_FACTOR
