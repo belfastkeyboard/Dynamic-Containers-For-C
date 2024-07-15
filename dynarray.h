@@ -38,10 +38,6 @@
 #include <assert.h>
 #include <stdbool.h>
 
-#undef GROW_FACTOR
-#undef ARRAY_MAIN
-
-#define GROW_FACTOR 2
 #define ARRAY_MIN 1
 
 #define constructor_array(type)                                                                    \
@@ -55,33 +51,33 @@
 }
 
 #ifndef destructor
-    #define destructor(item) \
-        free(item._array);   \
-        item._array = NULL;  \
-        item._elements = 0;  \
-        item._capacity = 0;  \
+    #define destructor(item)    \
+        free(item._array);      \
+        item._array     = NULL; \
+        item._elements  = 0;    \
+        item._capacity  = 0;    \
         item._type_size = 0
 #endif
 
-#define ARRAY(type)                                       \
-typedef struct array_##type                               \
-{                                                         \
-    type*  _array;                                        \
-    size_t _elements;                                     \
-    size_t _capacity;                                     \
-    size_t _type_size;                                    \
-    void   (*push_back)(struct array_##type*, type);      \
-    void   (*insert)(struct array_##type*, type, size_t); \
-    void   (*pop_back)(struct array_##type*);             \
-    size_t (*erase)(struct array_##type*, size_t);        \
-    type   (*front)(struct array_##type*);                \
-    type   (*back)(struct array_##type*);                 \
-    type   (*get)(struct array_##type*, size_t);          \
-    bool   (*empty)(struct array_##type*);                \
-    size_t (*size)(struct array_##type*);                 \
-    void   (*clear)(struct array_##type*);                \
-    void   (*reserve)(struct array_##type*, size_t);      \
-    void   (*shrink)(struct array_##type*);               \
+#define ARRAY(type)                                                         \
+typedef struct array_##type                                                 \
+{                                                                           \
+    type*  _array;                                                          \
+    size_t _elements;                                                       \
+    size_t _capacity;                                                       \
+    size_t _type_size;                                                      \
+    void   (*push_back)(struct array_##type*, type);                        \
+    void   (*insert)(struct array_##type*, type, size_t);                   \
+    void   (*pop_back)(struct array_##type*);                               \
+    size_t (*erase)(struct array_##type*, size_t);                          \
+    type   (*front)(struct array_##type*);                                  \
+    type   (*back)(struct array_##type*);                                   \
+    type   (*get)(struct array_##type*, size_t);                            \
+    bool   (*empty)(struct array_##type*);                                  \
+    size_t (*size)(struct array_##type*);                                   \
+    void   (*clear)(struct array_##type*);                                  \
+    void   (*reserve)(struct array_##type*, size_t);                        \
+    void   (*shrink)(struct array_##type*);                                 \
 } array_##type;                                                             \
                                                                             \
 void array_push_##type(struct array_##type* arr, type elem)                 \
@@ -89,7 +85,7 @@ void array_push_##type(struct array_##type* arr, type elem)                 \
     if (arr->_elements >= arr->_capacity)                                   \
     {                                                                       \
         arr->_capacity = (arr->_capacity > 0) ?                             \
-            arr->_capacity * GROW_FACTOR : ARRAY_MIN;                       \
+            arr->_capacity * 2 : 1;                                         \
                                                                             \
         type* tmp = realloc(arr->_array, arr->_type_size * arr->_capacity); \
         assert(tmp != NULL);                                                \
@@ -104,7 +100,7 @@ void array_insert_##type(struct array_##type* arr, type elem, size_t index) \
     if (arr->_elements >= arr->_capacity)                                   \
     {                                                                       \
         arr->_capacity = (arr->_capacity > 0) ?                             \
-            arr->_capacity * GROW_FACTOR : ARRAY_MIN;                       \
+            arr->_capacity * 2 : 1;                                         \
         type* tmp = realloc(arr->_array, arr->_type_size * arr->_capacity); \
                                                                             \
         assert(tmp != NULL);                                                \
