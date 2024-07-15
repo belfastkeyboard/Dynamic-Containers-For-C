@@ -116,9 +116,9 @@ typedef struct M_SET(type)                                                      
     bool (*_cmp)(type, type);                                                                \
     unsigned long (*_hash)(type);                                                            \
                                                                                              \
-    SetIterator_int* (*begin)(struct Set_int*);                                              \
-    SetIterator_int* (*next)(struct Set_int*, SetIterator_int*);                             \
-    SetIterator_int* (*end)(struct Set_int*);                                                \
+    M_ITER(type) *(*begin)(struct Set_int*);                                                 \
+    M_ITER(type) *(*next)(struct Set_int*, M_ITER(type)*);                                   \
+    M_ITER(type) *(*end)(struct Set_int*);                                                   \
                                                                                              \
     void (*insert)(struct M_SET(type)*, type);                                               \
     void (*erase)(struct M_SET(type)*, type);                                                \
@@ -129,16 +129,16 @@ typedef struct M_SET(type)                                                      
     void (*clear)(struct M_SET(type)*);                                                      \
 } M_SET(type);                                                                               \
                                                                                              \
-SetIterator_int *begin_int(Set_int* set)                                                     \
+M_ITER(type) *begin_int(M_SET(type)* set)                                                    \
 {                                                                                            \
-    SetIterator_int *iter = set->_array;                                                     \
+    M_ITER(type) *iter = set->_array;                                                        \
     while (                                                                                  \
         iter < (set->_array + set->_capacity) && (iter->hash == INVALID || iter->tombstone)  \
     ) ++iter;                                                                                \
     return iter;                                                                             \
 }                                                                                            \
                                                                                              \
-SetIterator_int *next_int(Set_int* set, SetIterator_int* iter)                               \
+M_ITER(type) *next_int(M_SET(type)* set, M_ITER(type)* iter)                                 \
 {                                                                                            \
     do {                                                                                     \
         ++iter;                                                                              \
@@ -148,13 +148,13 @@ SetIterator_int *next_int(Set_int* set, SetIterator_int* iter)                  
     return iter;                                                                             \
 }                                                                                            \
                                                                                              \
-SetIterator_int *end_int(Set_int* set)                                                       \
+M_ITER(type) *end_int(Set_int* set)                                                          \
 {                                                                                            \
     return set->_array + set->_capacity;                                                     \
 }                                                                                            \
                                                                                              \
 unsigned int                                                                                 \
-h_lprobe_int(Set_int* set, int value, unsigned int index, bool skip_tombstones)              \
+JOIN(h_lprobe, type)(M_SET(type) *set, int value, unsigned int index, bool skip_tombstones)  \
 {                                                                                            \
     assert(set && set->_array);                                                              \
                                                                                              \
@@ -164,7 +164,7 @@ h_lprobe_int(Set_int* set, int value, unsigned int index, bool skip_tombstones) 
                                                                                              \
     while (found == -1)                                                                      \
     {                                                                                        \
-        SetBucket_int bucket = set->_array[index];                                           \
+        M_BUCKET(type) bucket = set->_array[index];                                          \
                                                                                              \
         if (skip_tombstones && tombstone == INVALID &&                                       \
             bucket.hash != INVALID && bucket.tombstone)                                      \
@@ -194,7 +194,7 @@ h_lprobe_int(Set_int* set, int value, unsigned int index, bool skip_tombstones) 
     return found;                                                                            \
 }                                                                                            \
                                                                                              \
-void JOIN(h_resize, type)(M_SET(type)* set, float factor)                                    \
+void JOIN(h_resize, type)(M_SET(type) *set, float factor)                                    \
 {                                                                                            \
     assert(set->_array);                                                                     \
                                                                                              \
@@ -322,7 +322,7 @@ bool JOIN(set_is_subset, type)(M_SET(type)* a, M_SET(type)* b)                  
     }                                                                                        \
     else                                                                                     \
     {                                                                                        \
-        for (SetIterator_int *iter = a->begin(a); iter != a->end(a); iter = a->next(a, iter))\
+        for (M_ITER(type) *iter = a->begin(a); iter != a->end(a); iter = a->next(a, iter))   \
         {                                                                                    \
             if (b->contains(b, iter->value))                                                 \
                 continue;                                                                    \
@@ -339,11 +339,11 @@ M_SET(type) JOIN(set_union, type)(M_SET(type)* a, M_SET(type)* b)               
 {                                                                                            \
     M_SET(type) c = set_constructor(type);                                                   \
                                                                                              \
-    for (SetIterator_int *iter = a->begin(a); iter != a->end(a); iter = a->next(a, iter))    \
+    for (M_ITER(type) *iter = a->begin(a); iter != a->end(a); iter = a->next(a, iter))       \
     {                                                                                        \
         c.insert(&c, iter->value);                                                           \
     }                                                                                        \
-    for (SetIterator_int *iter = b->begin(b); iter != b->end(b); iter = b->next(b, iter))    \
+    for (M_ITER(type) *iter = b->begin(b); iter != b->end(b); iter = b->next(b, iter))       \
     {                                                                                        \
         c.insert(&c, iter->value);                                                           \
     }                                                                                        \
@@ -355,7 +355,7 @@ M_SET(type) JOIN(set_difference, type)(M_SET(type)* a, M_SET(type)* b)          
 {                                                                                            \
     M_SET(type) c = set_constructor(type);                                                   \
                                                                                              \
-    for (SetIterator_int *iter = b->begin(b); iter != b->end(b); iter = b->next(b, iter))    \
+    for (M_ITER(type) *iter = b->begin(b); iter != b->end(b); iter = b->next(b, iter))       \
     {                                                                                        \
         if (a->contains(a, iter->value))                                                     \
             continue;                                                                        \
@@ -370,7 +370,7 @@ M_SET(type) JOIN(set_intersection, type)(M_SET(type)* a, M_SET(type)* b)        
 {                                                                                            \
     M_SET(type) c = set_constructor(type);                                                   \
                                                                                              \
-    for (SetIterator_int *iter = b->begin(b); iter != b->end(b); iter = b->next(b, iter))      \
+    for (M_ITER(type) *iter = b->begin(b); iter != b->end(b); iter = b->next(b, iter))       \
     {                                                                                        \
         if (b->contains(b, iter->value))                                                     \
             c.insert(&c, iter->value);                                                       \
