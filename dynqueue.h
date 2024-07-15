@@ -1,4 +1,4 @@
-// Queue implementation in C based on C++ vector implementation
+// Queue implementation in C based on C++ queue implementation
 
 // TODO: test
 
@@ -43,11 +43,6 @@
 #include <assert.h>
 #include <stdbool.h>
 
-#undef GROW_FACTOR
-#undef QUEUE_MIN
-
-#define GROW_FACTOR 2
-#define QUEUE_MIN 1
 
 #define constructor_queue(type)                                                                   \
 {                                                                                                 \
@@ -86,7 +81,7 @@ void queue_push_##type(struct queue_##type* que, type elem)                 \
     if (que->_elements >= que->_capacity)                                   \
     {                                                                       \
         que->_capacity = (que->_capacity > 0) ?                             \
-            que->_capacity * GROW_FACTOR : QUEUE_MIN;                       \
+            que->_capacity * 2 : 1;                                         \
                                                                             \
         type* tmp = realloc(que->_array, que->_type_size * que->_capacity); \
         assert(tmp != NULL);                                                \

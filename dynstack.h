@@ -1,4 +1,4 @@
-// Stack implementation in C based on C++ vector implementation
+// Stack implementation in C based on C++ stack implementation
 
 // TODO: test
 
@@ -40,11 +40,6 @@
 #include <assert.h>
 #include <stdbool.h>
 
-#undef GROW_FACTOR
-#undef STACK_MIN
-
-#define GROW_FACTOR 2
-#define STACK_MIN 1
 
 #define constructor_stack(type) {                                                                   \
     ._elements = 0, ._capacity = 0, ._type_size = sizeof(type), ._array = calloc(0, sizeof(type)),  \
@@ -80,7 +75,7 @@ void stack_push_##type(struct stack_##type* stk, type elem)                 \
     if (stk->_elements >= stk->_capacity)                                   \
     {                                                                       \
         stk->_capacity = (stk->_capacity > 0) ?                             \
-            stk->_capacity * GROW_FACTOR : STACK_MIN;                       \
+            stk->_capacity * 2 : 1;                                         \
                                                                             \
         type* tmp = realloc(stk->_array, stk->_type_size * stk->_capacity); \
         assert(tmp != NULL);                                                \
