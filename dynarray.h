@@ -60,7 +60,7 @@
         item._array = NULL;  \
         item._elements = 0;  \
         item._capacity = 0;  \
-        item._type_size = 0;
+        item._type_size = 0
 #endif
 
 #define ARRAY(type)                                       \
